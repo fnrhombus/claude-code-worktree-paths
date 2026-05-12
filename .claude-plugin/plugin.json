@@ -1,0 +1,12 @@
+{
+  "name": "TODO-plugin-name",
+  "version": "0.1.0",
+  "description": "TODO: one-sentence description of what this plugin does",
+  "author": {
+    "name": "fnrhombus"
+  },
+  "homepage": "https://github.com/fnrhombus/TODO-repo-name",
+  "repository": "https://github.com/fnrhombus/TODO-repo-name",
+  "license": "MIT",
+  "hooks": "./hooks/hooks.json"
+}
