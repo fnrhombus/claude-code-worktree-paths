@@ -1,0 +1,49 @@
+{
+  "name": "claude-code-worktree-paths",
+  "version": "0.1.0",
+  "description": "Claude Code plugin that places --worktree worktrees at ~/src/<repo>@<user>+<wtname>/ on bare-named branches, when invoked via fnclaude.",
+  "main": "dist/index.js",
+  "bin": {
+    "claude-code-worktree-paths": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    ".claude-plugin",
+    "hooks"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "hook",
+    "worktree",
+    "git",
+    "developer-tools",
+    "ai-coding"
+  ],
+  "author": "fnrhombus",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fnrhombus/claude-code-worktree-paths.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fnrhombus/claude-code-worktree-paths/issues"
+  },
+  "homepage": "https://github.com/fnrhombus/claude-code-worktree-paths#readme",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "sync-plugin-version": "node -e \"const fs=require('fs');const p=require('./package.json');const f='./.claude-plugin/plugin.json';const j=JSON.parse(fs.readFileSync(f,'utf8'));j.version=p.version;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n');console.log('synced plugin.json to',p.version);\"",
+    "prebuild": "npm run sync-plugin-version",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@fnrhombus/claude-code-hooks": "^0.1.1",
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,5 +1,6 @@
 node_modules/
-dist/
+# dist/ is intentionally committed — plugins are served directly from GitHub,
+# there is no build step on the user side.
 .env
 .env.*
 !.env.example

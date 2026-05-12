@@ -1,12 +1,12 @@
 {
-  "name": "TODO-plugin-name",
+  "name": "claude-code-worktree-paths",
   "version": "0.1.0",
-  "description": "TODO: one-sentence description of what this plugin does",
+  "description": "Claude Code plugin that places --worktree worktrees at ~/src/<repo>@<user>+<wtname>/ on bare-named branches, when invoked via fnclaude.",
   "author": {
     "name": "fnrhombus"
   },
-  "homepage": "https://github.com/fnrhombus/TODO-repo-name",
-  "repository": "https://github.com/fnrhombus/TODO-repo-name",
+  "homepage": "https://github.com/fnrhombus/claude-code-worktree-paths",
+  "repository": "https://github.com/fnrhombus/claude-code-worktree-paths",
   "license": "MIT",
   "hooks": "./hooks/hooks.json"
 }

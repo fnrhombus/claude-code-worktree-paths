@@ -1,8 +1,7 @@
 {
   "hooks": {
-    "PreToolUse": [
+    "WorktreeCreate": [
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
