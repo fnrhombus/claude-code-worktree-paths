@@ -1,7 +1,7 @@
 {
   "name": "claude-code-worktree-paths",
   "version": "0.1.0",
-  "description": "Claude Code plugin that places --worktree worktrees at ~/src/<repo>@<user>+<wtname>/ on bare-named branches, when invoked via fnclaude.",
+  "description": "Claude Code plugin: customize where `--worktree` worktrees go and what branch they get, via path/branch templates in settings.json.",
   "author": {
     "name": "fnrhombus"
   },

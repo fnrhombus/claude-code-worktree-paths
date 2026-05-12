@@ -1,135 +1,220 @@
 #!/usr/bin/env node
 
-// claude-code-worktree-paths
-// WorktreeCreate hook: places worktrees at ~/src/<repo>@<user>+<wtname>/
-// when FNCLAUDE_INVOCATION is set; otherwise uses Claude Code's default layout.
+// claude-code-worktree-paths — WorktreeCreate hook with templated path/branch.
+// Reads ~/.claude/settings.json for `worktreePaths.{pathTemplate,branchTemplate,gateEnvVar}`.
+// Defaults match Claude Code's native behavior, so installing without configuring is a no-op.
+//
+// Performance: avoids the @fnrhombus/claude-code-hooks runtime (its dispatch/
+// abstraction layer adds parse cost we don't need for a single-event hook),
+// uses CLAUDE_PROJECT_DIR to skip `git rev-parse`, and skips `git remote` when
+// templates don't reference {owner}/{repo}. The plugin is on the synchronous
+// path between user keystroke and worktree creation; every fork-saved is felt.
+//
 // https://github.com/fnrhombus/claude-code-worktree-paths
 
-import { execSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 
-import { runHook } from "@fnrhombus/claude-code-hooks";
+const DEFAULT_PATH_TEMPLATE = ".claude/worktrees/{input}";
+const DEFAULT_BRANCH_TEMPLATE = "worktree-{input}";
 
-// ---------------------------------------------------------------------------
-// Typed wrapper — @fnrhombus/claude-code-hooks includes WorktreeCreateInput
-// with a `name` field and common fields (cwd, session_id, etc.).
-// The `cwd` field is the repo root at the time the hook fires.
-//
-// NOTE: the hook returns a `worktreePath` via the hookSpecificOutput envelope
-// (for HTTP hooks that's the JSON field; for command hooks Claude Code reads
-// stdout). The wrapper handles the envelope; we just return { worktreePath }.
-// ---------------------------------------------------------------------------
+interface Settings {
+  pathTemplate?: string;
+  branchTemplate?: string;
+  gateEnvVar?: string;
+}
 
-runHook({
-  worktreeCreate: (input) => {
-    const { name, cwd } = input;
+function main(): void {
+  const input = JSON.parse(readFileSync(0, "utf8")) as {
+    worktree_name?: string;
+    name?: string;
+    cwd?: string;
+    base_commit?: string;
+  };
 
-    // Resolve the git repo root from cwd (cwd is the project root at hook time).
-    let repoRoot: string;
-    try {
-      repoRoot = execSync("git rev-parse --show-toplevel", {
-        cwd,
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"],
-      }).trim();
-    } catch {
-      // Fall back to cwd if git command fails (shouldn't happen in normal use).
-      process.stderr.write(
-        `claude-code-worktree-paths: git rev-parse failed in ${cwd}, using cwd as repo root\n`,
-      );
-      repoRoot = cwd;
-    }
+  const wtName = input.worktree_name ?? input.name;
+  if (!wtName) throw new Error("worktree_name missing from hook input");
+  const cwd = input.cwd ?? process.cwd();
+  const baseCommit = input.base_commit;
 
-    let targetDir: string;
-    let targetBranch: string;
+  const settings = loadSettings();
+  const gateUnsatisfied =
+    settings.gateEnvVar !== undefined && !process.env[settings.gateEnvVar];
 
-    if (process.env["FNCLAUDE_INVOCATION"]) {
-      // Tom's convention: ~/src/<repoSlug>+<wtname>
-      //
-      // repo_root basename may already be <repo>@<user>+<something> when
-      // the worktree's parent is itself a worktree. Strip any existing
-      // +<workspace> suffix so we don't accumulate +wt+wt+wt.
-      const repoBasename = basename(repoRoot);
-      const repoSlug = repoBasename.includes("+")
-        ? repoBasename.slice(0, repoBasename.indexOf("+"))
-        : repoBasename;
+  const pathTpl = gateUnsatisfied
+    ? DEFAULT_PATH_TEMPLATE
+    : settings.pathTemplate ?? DEFAULT_PATH_TEMPLATE;
+  const branchTpl = gateUnsatisfied
+    ? DEFAULT_BRANCH_TEMPLATE
+    : settings.branchTemplate ?? DEFAULT_BRANCH_TEMPLATE;
 
-      targetDir = join(process.env["HOME"] ?? "/root", "src", `${repoSlug}+${name}`);
-      targetBranch = name;
+  // Claude Code provides CLAUDE_PROJECT_DIR; falling back to git rev-parse
+  // costs ~10ms per fork on hot disk and is the bottleneck of the no-config path.
+  const repoRoot =
+    process.env["CLAUDE_PROJECT_DIR"] ?? gitRepoRoot(cwd);
+  const repoDir = basename(repoRoot);
+  const cwdLeaf = basename(cwd);
 
-      process.stderr.write(
-        `claude-code-worktree-paths: fnclaude mode — ${targetDir} on branch ${targetBranch}\n`,
-      );
-    } else {
-      // Default Claude Code layout
-      targetDir = join(repoRoot, ".claude", "worktrees", name);
-      targetBranch = `worktree-${name}`;
+  // Lazy: skip the git remote fork unless the templates actually need it.
+  const needRemote = ownerOrRepoUsed(pathTpl) || ownerOrRepoUsed(branchTpl);
+  const remote = needRemote ? parseRemote(repoRoot) : null;
 
-      process.stderr.write(
-        `claude-code-worktree-paths: default mode — ${targetDir} on branch ${targetBranch}\n`,
-      );
-    }
+  if (
+    !remote &&
+    (pathTpl.includes("{owner}") || branchTpl.includes("{owner}"))
+  ) {
+    throw new Error("template uses {owner} but repo has no `origin` remote");
+  }
 
-    // Sanity check: target must not already exist.
-    if (existsSync(targetDir)) {
-      throw new Error(
-        `claude-code-worktree-paths: target directory already exists: ${targetDir}`,
-      );
-    }
+  const vars: Record<string, string> = {
+    input: wtName,
+    owner: remote?.owner ?? "",
+    repo: remote?.repo ?? repoDir,
+    "repo-dir": repoDir,
+    cwd: cwdLeaf,
+  };
 
-    // Ensure parent directory exists.
-    mkdirSync(dirname(targetDir), { recursive: true });
+  const branch = applyTemplate(branchTpl, vars);
+  vars["branch"] = branch;
+  const targetDir = resolvePath(applyTemplate(pathTpl, vars), repoRoot);
 
-    // Check whether the branch already exists locally.
-    const branchExists = branchExistsLocally(repoRoot, targetBranch);
+  if (existsSync(targetDir)) {
+    throw new Error(`target already exists: ${targetDir}`);
+  }
+  mkdirSync(dirname(targetDir), { recursive: true });
 
-    // Build the worktree add command.
-    const args = branchExists
-      ? ["worktree", "add", targetDir, targetBranch]
-      : ["worktree", "add", "-b", targetBranch, targetDir];
+  const branchExists = branchExistsLocally(repoRoot, branch);
+  const args = branchExists
+    ? ["-C", repoRoot, "worktree", "add", targetDir, branch]
+    : [
+        "-C",
+        repoRoot,
+        "worktree",
+        "add",
+        "-b",
+        branch,
+        targetDir,
+        ...(baseCommit ? [baseCommit] : []),
+      ];
 
-    const label = branchExists
-      ? `checkout existing branch '${targetBranch}'`
-      : `create branch '${targetBranch}'`;
-    process.stderr.write(`claude-code-worktree-paths: ${label}\n`);
+  process.stderr.write(
+    `claude-code-worktree-paths: ${branchExists ? "checkout" : "create"} '${branch}' at ${targetDir}\n`,
+  );
 
-    try {
-      const output = execSync(["git", "-C", repoRoot, ...args].join(" "), {
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      if (output) process.stderr.write(output);
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : String(err);
-      throw new Error(`claude-code-worktree-paths: git worktree add failed: ${msg}`);
-    }
+  try {
+    const out = execFileSync("git", args, { encoding: "utf8" });
+    if (out) process.stderr.write(out);
+  } catch (err) {
+    throw new Error(
+      `git worktree add failed: ${(err as Error).message}`,
+    );
+  }
 
-    if (!existsSync(targetDir)) {
-      throw new Error(
-        `claude-code-worktree-paths: git worktree add succeeded but ${targetDir} does not exist`,
-      );
-    }
+  if (!existsSync(targetDir)) {
+    throw new Error(
+      `git worktree add succeeded but ${targetDir} does not exist`,
+    );
+  }
 
-    // The typed wrapper writes { hookSpecificOutput: { hookEventName: "WorktreeCreate",
-    // worktreePath: targetDir } } to stdout, which Claude Code reads as the worktree path.
-    return { worktreePath: targetDir };
-  },
-});
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "WorktreeCreate",
+        worktreePath: targetDir,
+      },
+    }),
+  );
+}
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+function loadSettings(): Settings {
+  const path = join(homedir(), ".claude", "settings.json");
+  if (!existsSync(path)) return {};
+  try {
+    const j = JSON.parse(readFileSync(path, "utf8")) as {
+      worktreePaths?: Settings;
+    };
+    return j.worktreePaths ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function ownerOrRepoUsed(tpl: string): boolean {
+  return tpl.includes("{owner}") || tpl.includes("{repo}");
+}
+
+function gitRepoRoot(cwd: string): string {
+  try {
+    return execFileSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return cwd;
+  }
+}
+
+function parseRemote(
+  repoRoot: string,
+): { owner: string; repo: string } | null {
+  let url: string;
+  try {
+    url = execFileSync(
+      "git",
+      ["-C", repoRoot, "remote", "get-url", "origin"],
+      { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+    ).trim();
+  } catch {
+    return null;
+  }
+  // git@host:owner/repo.git, https://host/owner/repo[.git], ssh://git@host/owner/repo.git
+  const m = url.match(/[:/]([^/:]+)\/([^/]+?)(?:\.git)?\/?$/);
+  if (!m || !m[1] || !m[2]) return null;
+  return { owner: m[1], repo: m[2] };
+}
 
 function branchExistsLocally(repoRoot: string, branch: string): boolean {
   try {
-    execSync(
-      `git -C ${JSON.stringify(repoRoot)} show-ref --verify --quiet refs/heads/${JSON.stringify(branch)}`,
+    execFileSync(
+      "git",
+      [
+        "-C",
+        repoRoot,
+        "show-ref",
+        "--verify",
+        "--quiet",
+        `refs/heads/${branch}`,
+      ],
       { stdio: ["pipe", "pipe", "pipe"] },
     );
     return true;
   } catch {
     return false;
   }
+}
+
+function applyTemplate(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\{([a-z][a-z-]*)\}/g, (_m, k: string) => {
+    if (!(k in vars)) {
+      throw new Error(`unknown placeholder {${k}} in "${tpl}"`);
+    }
+    return vars[k] as string;
+  });
+}
+
+function resolvePath(tpl: string, repoRoot: string): string {
+  let raw = tpl;
+  if (raw === "~") raw = homedir();
+  else if (raw.startsWith("~/")) raw = join(homedir(), raw.slice(2));
+  return normalize(isAbsolute(raw) ? raw : join(repoRoot, raw));
+}
+
+try {
+  main();
+} catch (err) {
+  process.stderr.write(
+    `claude-code-worktree-paths: ${(err as Error).message}\n`,
+  );
+  process.exit(2);
 }
