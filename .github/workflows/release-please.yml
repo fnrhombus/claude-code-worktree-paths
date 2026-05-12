@@ -13,6 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Auto-merge the release PR so the user-visible flow is one merge:
+      # feature PR merges → release PR opens → instantly merged → version
+      # bumped, tagged, released. Branch protection stays satisfied (the merge
+      # still goes through a PR), no bypass needed.
+      - name: Auto-merge release PR
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number=$(echo '${{ steps.release.outputs.pr }}' | jq -r .number)
+          gh pr merge "$pr_number" --auto --squash --repo "$GITHUB_REPOSITORY"

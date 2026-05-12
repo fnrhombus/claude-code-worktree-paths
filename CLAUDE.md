@@ -23,7 +23,7 @@ Triggers:
 - `feat!:` or `BREAKING CHANGE:` in body → major bump
 - `chore:`, `docs:`, `refactor:`, `style:`, `test:` → no bump (still good to use, just doesn't release)
 
-After a normal PR merges to `main`, the release-please workflow opens (or updates) a `chore(main): release X.Y.Z` PR with the version bump and changelog. **Merge that PR** to release: it tags the commit, creates the GitHub release, and the marketplace cron picks it up.
+After a normal PR merges to `main`, the release-please workflow opens a `chore(main): release X.Y.Z` PR with the version bump and changelog — and **auto-merges it immediately**, so you don't have to. From the user-visible side it's a single PR merge → version bump + tag + GitHub release happen automatically. (Auto-merge requires the repo-level "Allow auto-merge" setting, which is on.)
 
 `package.json` and `.claude-plugin/plugin.json` versions are kept in sync automatically via release-please's `extra-files` config — no manual sync.
 
