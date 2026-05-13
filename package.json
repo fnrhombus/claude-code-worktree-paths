@@ -33,6 +33,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
     "sync-plugin-version": "node -e \"const fs=require('fs');const p=require('./package.json');const f='./.claude-plugin/plugin.json';const j=JSON.parse(fs.readFileSync(f,'utf8'));j.version=p.version;fs.writeFileSync(f,JSON.stringify(j,null,2)+'\\n');console.log('synced plugin.json to',p.version);\"",
     "prebuild": "npm run sync-plugin-version",
     "prepublishOnly": "npm run build"
@@ -41,6 +42,7 @@
     "@fnrhombus/claude-code-hooks": "^0.1.1",
     "@types/node": "^22.0.0",
     "tsup": "^8.3.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0"
   },
   "engines": {
