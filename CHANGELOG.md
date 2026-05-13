@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.2.0...claude-code-worktree-paths-v0.3.0) (2026-05-13)
+
+
+### Features
+
+* sanitize worktree_name input to path-safe characters ([#3](https://github.com/fnrhombus/claude-code-worktree-paths/issues/3)) ([0842f9c](https://github.com/fnrhombus/claude-code-worktree-paths/commit/0842f9c06c7245c695dd13343139bab3d34dd2f7))
+
 ## [0.2.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.1.0...claude-code-worktree-paths-v0.2.0) (2026-05-13)
 
 
