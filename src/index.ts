@@ -17,6 +17,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 
+import { sanitizeForPath } from "./sanitize";
+
 const DEFAULT_PATH_TEMPLATE = ".claude/worktrees/{input}";
 const DEFAULT_BRANCH_TEMPLATE = "worktree-{input}";
 
@@ -34,8 +36,11 @@ function main(): void {
     base_commit?: string;
   };
 
-  const wtName = input.worktree_name ?? input.name;
-  if (!wtName) throw new Error("worktree_name missing from hook input");
+  const rawName = input.worktree_name ?? input.name;
+  if (!rawName) throw new Error("worktree_name missing from hook input");
+  // Scrub path-illegal / branch-illegal chars before they reach the filesystem
+  // or git. Throws with a clear message if the name reduces to empty.
+  const wtName = sanitizeForPath(rawName);
   const cwd = input.cwd ?? process.cwd();
   const baseCommit = input.base_commit;
 
