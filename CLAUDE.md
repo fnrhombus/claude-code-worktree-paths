@@ -1,42 +1,55 @@
-# Claude Code Plugin Template
+# claude-code-worktree-paths
 
-This is a template repo. When a new plugin is created from it (`gh repo create --template fnrhombus/claude-code-plugin-template`), this file tells Claude (and future-you) what to do.
+Claude Code plugin: customize where `--worktree` worktrees go and what branch they get, via templates in `~/.claude/settings.json`. See `README.md` for the user-facing docs.
 
-## First-time setup for a new plugin
+## Branch policy
 
-After cloning the new repo:
+**Never commit to `main`.** Main is protected on GitHub — direct pushes are rejected. All work, including one-line fixes, goes through:
 
-1. **Search-and-replace `TODO-plugin-name`** in `.claude-plugin/plugin.json`, `README.md`, and `package.json` with the actual plugin name (kebab-case, e.g. `claude-code-thingfix`).
-2. **Search-and-replace `TODO-repo-name`** with the actual GitHub repo name (usually the same as the plugin name).
-3. **Update `.claude-plugin/plugin.json`** with a real `description`.
-4. **Write the actual plugin code** in `src/index.ts`. Use [`@fnrhombus/claude-code-hooks`](https://github.com/fnrhombus/claude-code-hooks) for the typed hook wrapper — it handles all the stdin/stdout/envelope plumbing.
-5. **Update `hooks/hooks.json`** if the hook event or matcher is different from the default `PreToolUse` / `Bash`.
-6. **Rewrite `README.md`** as *advertising* — lead with the problem, show the before/after, keep install minimal. See `fnrhombus/claude-code-pathfix` for a reference.
-7. **Add the `claude-code-plugin` topic** to the repo: `gh repo edit --add-topic claude-code-plugin`. This is how `fnrhombus/claude-plugins` (the central marketplace) discovers the plugin — without this topic, the plugin will never show up in `/plugin install`.
-8. **Commit + push** to `main`.
+1. Create a feature branch (`git checkout -b feat/whatever`)
+2. Commit there with conventional-commit messages (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, etc.)
+3. Push the branch, open a PR
+4. Merge the PR
 
-## Publishing a new version
+The branch protection enforces this — you can't bypass it locally even if you forget.
 
-1. Bump the `version` in both `package.json` and `.claude-plugin/plugin.json` (keep them in sync).
-2. Commit, tag (`git tag v0.2.0 && git push --tags`), let CI publish to npm.
-3. **Refresh the marketplace** so users see the new version within minutes instead of waiting for the daily cron:
+## Release policy
 
-   ```bash
-   gh workflow run update-marketplace.yml --repo fnrhombus/claude-plugins
-   ```
+Versioning is automated by [release-please](https://github.com/googleapis/release-please). **Don't bump versions manually.**
 
-   This triggers the marketplace repo's `update-marketplace.yml` workflow manually. It will re-scan all `claude-code-plugin`-tagged repos (including this one), read the updated `plugin.json`, and commit a refreshed `marketplace.json` to itself.
+Triggers:
+- `feat:` → minor bump (0.x → 0.(x+1).0)
+- `fix:` → patch bump
+- `feat!:` or `BREAKING CHANGE:` in body → major bump
+- `chore:`, `docs:`, `refactor:`, `style:`, `test:` → no bump (still good to use, just doesn't release)
 
-   Alternatively, wait — the marketplace refreshes on a daily cron anyway. The manual trigger is only useful if you want the new version visible immediately.
+After a normal PR merges to `main`, the release-please workflow opens a `chore(main): release X.Y.Z` PR with the version bump and changelog — and **auto-merges it immediately**, so you don't have to. From the user-visible side it's a single PR merge → version bump + tag + GitHub release happen automatically. (Auto-merge requires the repo-level "Allow auto-merge" setting, which is on.)
 
-## Why the indirect flow?
+`package.json` and `.claude-plugin/plugin.json` versions are kept in sync automatically via release-please's `extra-files` config — no manual sync.
 
-GitHub's `GITHUB_TOKEN` is scoped to its own repo, so this plugin's CI can't push to `fnrhombus/claude-plugins` directly. Cross-repo pushes would need a Personal Access Token stored as a secret in every plugin repo — annoying to set up once per plugin, and a long-lived credential to manage.
+## After a release
 
-Instead, the marketplace *pulls* from plugin repos on a schedule using its own `GITHUB_TOKEN` (which naturally has write access to itself). Plugin repos don't need any secrets or auth; they just need the `claude-code-plugin` topic and a valid `.claude-plugin/plugin.json` on their default branch.
+The marketplace at `fnrhombus/claude-plugins` discovers new versions on its daily cron. To force-refresh immediately:
+
+```bash
+gh workflow run update-marketplace.yml --repo fnrhombus/claude-plugins
+```
+
+## Building
+
+`dist/index.js` is committed to the repo because plugins distributed via `/plugin install` are served directly from GitHub repo contents — no build step runs on the user side. **Whenever `src/` changes, run `npm run build` and commit `dist/` in the same PR.**
+
+```bash
+npm run typecheck   # tsc --noEmit, strict
+npm run build       # tsup, bundles to dist/index.js
+```
+
+The build is intentionally tiny (~3 KB, single CJS file) — the plugin is on the synchronous path between user keystroke and worktree creation, and every saved millisecond is felt. Don't add the `@fnrhombus/claude-code-hooks` runtime back unless you have a reason; the inline stdin/JSON protocol in `src/index.ts` is faster.
 
 ## What NOT to do
 
-- **Don't hand-edit `fnrhombus/claude-plugins/.claude-plugin/marketplace.json`.** The cron overwrites it on every run. Update the source (`.claude-plugin/plugin.json` in *this* repo) and let the cron propagate.
-- **Don't forget the `claude-code-plugin` topic.** Without it, the marketplace has no way to discover the repo, and users can't install the plugin.
-- **Don't skip the `dist/` commit.** Plugins distributed via `/plugin install` are served directly from the GitHub repo contents — there's no build step on the user side. If this plugin has a build step (tsup, etc.), commit `dist/` alongside `src/` so the plugin hook can actually run what it advertises.
+- **Don't bump version manually** — release-please owns it.
+- **Don't commit to `main` directly** — branch protection blocks it.
+- **Don't skip the `dist/` commit.** No CI rebuilds for users; the file in the repo is what runs.
+- **Don't hand-edit `fnrhombus/claude-plugins/marketplace.json`** — the cron overwrites it. Update this repo and propagation happens.
+- **Don't remove the `claude-code-plugin` topic** on the GitHub repo — without it, the marketplace can't discover the plugin.
