@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 // claude-code-worktree-paths — WorktreeCreate hook with templated path/branch.
-// Reads ~/.claude/settings.json for `worktreePaths.{pathTemplate,branchTemplate,gateEnvVar}`.
-// Defaults match Claude Code's native behavior, so installing without configuring is a no-op.
+// Reads `worktreePaths.{pathTemplate,branchTemplate,gateEnvVar}` from Claude
+// Code's four settings tiers (managed > local > project > user, shallow-merged
+// per field — see src/settings.ts). Defaults match Claude Code's native
+// behavior, so installing without configuring is a no-op.
 //
 // Performance: avoids the @fnrhombus/claude-code-hooks runtime (its dispatch/
 // abstraction layer adds parse cost we don't need for a single-event hook),
@@ -18,15 +20,10 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, normalize } from "node:path";
 
 import { sanitizeForPath } from "./sanitize";
+import { loadSettings } from "./settings";
 
 const DEFAULT_PATH_TEMPLATE = ".claude/worktrees/{input}";
 const DEFAULT_BRANCH_TEMPLATE = "worktree-{input}";
-
-interface Settings {
-  pathTemplate?: string;
-  branchTemplate?: string;
-  gateEnvVar?: string;
-}
 
 function main(): void {
   const input = JSON.parse(readFileSync(0, "utf8")) as {
@@ -44,7 +41,16 @@ function main(): void {
   const cwd = input.cwd ?? process.cwd();
   const baseCommit = input.base_commit;
 
-  const settings = loadSettings();
+  // Claude Code provides CLAUDE_PROJECT_DIR; falling back to git rev-parse
+  // costs ~10ms per fork on hot disk and is the bottleneck of the no-config path.
+  const repoRoot =
+    process.env["CLAUDE_PROJECT_DIR"] ?? gitRepoRoot(cwd);
+  const repoDir = basename(repoRoot);
+  const cwdLeaf = basename(cwd);
+
+  // Settings load happens after repoRoot is known so the project + local
+  // tiers anchor to the same directory Claude Code resolves them against.
+  const settings = loadSettings(repoRoot);
   const gateUnsatisfied =
     settings.gateEnvVar !== undefined && !process.env[settings.gateEnvVar];
 
@@ -54,13 +60,6 @@ function main(): void {
   const branchTpl = gateUnsatisfied
     ? DEFAULT_BRANCH_TEMPLATE
     : settings.branchTemplate ?? DEFAULT_BRANCH_TEMPLATE;
-
-  // Claude Code provides CLAUDE_PROJECT_DIR; falling back to git rev-parse
-  // costs ~10ms per fork on hot disk and is the bottleneck of the no-config path.
-  const repoRoot =
-    process.env["CLAUDE_PROJECT_DIR"] ?? gitRepoRoot(cwd);
-  const repoDir = basename(repoRoot);
-  const cwdLeaf = basename(cwd);
 
   // Lazy: skip the git remote fork unless the templates actually need it.
   const needRemote = ownerOrRepoUsed(pathTpl) || ownerOrRepoUsed(branchTpl);
@@ -131,19 +130,6 @@ function main(): void {
       },
     }),
   );
-}
-
-function loadSettings(): Settings {
-  const path = join(homedir(), ".claude", "settings.json");
-  if (!existsSync(path)) return {};
-  try {
-    const j = JSON.parse(readFileSync(path, "utf8")) as {
-      worktreePaths?: Settings;
-    };
-    return j.worktreePaths ?? {};
-  } catch {
-    return {};
-  }
 }
 
 function ownerOrRepoUsed(tpl: string): boolean {

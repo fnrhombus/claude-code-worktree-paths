@@ -30,7 +30,7 @@ Installing without configuring is a no-op.
 
 ## Config
 
-Add a `worktreePaths` block to `~/.claude/settings.json`:
+Add a `worktreePaths` block to any [Claude Code settings file](https://code.claude.com/docs/en/settings):
 
 ```json
 "worktreePaths": {
@@ -41,6 +41,19 @@ Add a `worktreePaths` block to `~/.claude/settings.json`:
 ```
 
 All three keys are optional. Omit any you don't need.
+
+### Scopes
+
+The plugin reads `worktreePaths` from the same four tiers Claude Code itself uses, in the same precedence order (highest → lowest):
+
+| Tier | Path | Use for |
+|---|---|---|
+| Managed | `/etc/claude-code/managed-settings.json` (Linux), `/Library/Application Support/ClaudeCode/managed-settings.json` (macOS), `%ProgramData%\ClaudeCode\managed-settings.json` (Windows) | IT-deployed overrides |
+| Local | `<repo>/.claude/settings.local.json` | Your local-only project tweaks (gitignored) |
+| Project | `<repo>/.claude/settings.json` | Team-shared per-project layout (committed) |
+| User | `~/.claude/settings.json` | Your default across all projects |
+
+Tiers are **shallow-merged per field**, not whole-block-replaced. So a project that sets only `branchTemplate` keeps your user-level `pathTemplate` intact — set just the keys you want to override. (This is a small deviation from Claude Code's default whole-key override, picked because per-template independence is what people actually want here.)
 
 ### Placeholders
 
