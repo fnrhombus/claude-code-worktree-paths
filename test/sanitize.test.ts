@@ -12,7 +12,6 @@ describe("sanitizeForPath", () => {
 
   it("replaces forbidden characters with hyphens", () => {
     strictEqual(sanitizeForPath("foo bar"), "foo-bar");
-    strictEqual(sanitizeForPath("foo/bar"), "foo-bar");
     strictEqual(sanitizeForPath("foo\\bar"), "foo-bar");
     strictEqual(sanitizeForPath("foo:bar"), "foo-bar");
     strictEqual(sanitizeForPath("foo*bar"), "foo-bar");
@@ -26,12 +25,24 @@ describe("sanitizeForPath", () => {
   it("collapses runs of forbidden characters to a single hyphen", () => {
     strictEqual(sanitizeForPath("foo   bar"), "foo-bar");
     strictEqual(sanitizeForPath("foo!@#$bar"), "foo-bar");
-    strictEqual(sanitizeForPath("foo//bar"), "foo-bar");
   });
 
   it("collapses runs of hyphens", () => {
     strictEqual(sanitizeForPath("foo---bar"), "foo-bar");
-    strictEqual(sanitizeForPath("foo-/-bar"), "foo-bar");
+    // `-`, `/`, `-` are all allowed individually and contain no consecutive
+    // dashes or slashes, so the whole sequence passes through untouched.
+    strictEqual(sanitizeForPath("foo-/-bar"), "foo-/-bar");
+  });
+
+  it("preserves slashes for nested refs", () => {
+    strictEqual(sanitizeForPath("foo/bar"), "foo/bar");
+    strictEqual(sanitizeForPath("feat/foo"), "feat/foo");
+    strictEqual(sanitizeForPath("team/x/y/z"), "team/x/y/z");
+  });
+
+  it("collapses runs of slashes", () => {
+    strictEqual(sanitizeForPath("foo//bar"), "foo/bar");
+    strictEqual(sanitizeForPath("foo///"), "foo");
   });
 
   it("strips leading hyphens and dots", () => {
@@ -69,6 +80,17 @@ describe("sanitizeForPath", () => {
     throws(() => sanitizeForPath("---"), /reduces to an empty string/);
     throws(() => sanitizeForPath("..."), /reduces to an empty string/);
     throws(() => sanitizeForPath("日本語"), /reduces to an empty string/);
+  });
+
+  it("throws on path-escape patterns", () => {
+    // Leading slash would escape any configured path prefix.
+    throws(() => sanitizeForPath("/foo"), /absolute|leading/i);
+    // Only-slashes hits the leading-slash guard first; either rejection is fine.
+    throws(() => sanitizeForPath("///"));
+    // `..` is rejected per git's ref-format rule; also blocks foo/../bar.
+    throws(() => sanitizeForPath("foo/../bar"), /\.\./);
+    throws(() => sanitizeForPath("foo..bar"), /\.\./);
+    throws(() => sanitizeForPath("foo.."), /\.\./);
   });
 
   it("handles control characters", () => {
