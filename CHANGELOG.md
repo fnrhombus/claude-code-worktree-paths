@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.3.0...claude-code-worktree-paths-v0.4.0) (2026-05-17)
+
+
+### Features
+
+* read worktreePaths from all four Claude Code settings tiers ([#7](https://github.com/fnrhombus/claude-code-worktree-paths/issues/7)) ([dfa20f9](https://github.com/fnrhombus/claude-code-worktree-paths/commit/dfa20f9f47c9fc2ac24221764ff857c84967ca58))
+
 ## [0.3.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.2.0...claude-code-worktree-paths-v0.3.0) (2026-05-13)
 
 
