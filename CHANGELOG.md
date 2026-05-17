@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.4.0...claude-code-worktree-paths-v0.5.0) (2026-05-17)
+
+
+### Features
+
+* allow / in worktree/branch names, block path escape ([#6](https://github.com/fnrhombus/claude-code-worktree-paths/issues/6)) ([618acc5](https://github.com/fnrhombus/claude-code-worktree-paths/commit/618acc5f904714b792d0c593b31947f9329b1812))
+
 ## [0.4.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.3.0...claude-code-worktree-paths-v0.4.0) (2026-05-17)
 
 
