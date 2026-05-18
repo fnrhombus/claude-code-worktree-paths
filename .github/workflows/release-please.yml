@@ -15,17 +15,25 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
+          # PAT (not GITHUB_TOKEN) so the release PR's pull_request.opened
+          # event fires auto-merge.yml. GITHUB_TOKEN-created PRs don't
+          # trigger workflows, which is why earlier releases needed manual
+          # tag-pushing (the release PR auto-merged via github.token, and
+          # the resulting push to main didn't trigger this workflow again
+          # to create the tag).
+          token: ${{ secrets.AUTOMERGE_PAT }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
       # Auto-merge the release PR so the user-visible flow is one merge:
       # feature PR merges → release PR opens → instantly merged → version
-      # bumped, tagged, released. Branch protection stays satisfied (the merge
-      # still goes through a PR), no bypass needed.
+      # bumped, tagged, released. The PAT-created PR triggers auto-merge.yml
+      # which enables auto-merge from the PR side; this step is a safety net
+      # in case auto-merge.yml's path didn't fire for some reason.
       - name: Auto-merge release PR
         if: ${{ steps.release.outputs.pr }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.AUTOMERGE_PAT }}
         run: |
           pr_number=$(echo '${{ steps.release.outputs.pr }}' | jq -r .number)
           gh pr merge "$pr_number" --auto --squash --repo "$GITHUB_REPOSITORY"
