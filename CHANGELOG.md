@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.5.0...claude-code-worktree-paths-v1.0.0) (2026-05-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* existing users with `worktreePaths.pathTemplate` in their settings.json need to rename to `repoSettings.worktreeTemplate`. No auto-migration; the rename is one find-and-replace in your config.
+
+### Features
+
+* rename block to repoSettings; add host + clone-path placeholders ([#10](https://github.com/fnrhombus/claude-code-worktree-paths/issues/10)) ([faa248b](https://github.com/fnrhombus/claude-code-worktree-paths/commit/faa248b0e29ba5e05931f1bf46b884076e11eba4))
+
 ## [0.5.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.4.0...claude-code-worktree-paths-v0.5.0) (2026-05-17)
 
 
