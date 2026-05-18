@@ -1,12 +1,11 @@
 {
   "name": "claude-code-worktree-paths",
   "version": "1.0.0",
-  "description": "Claude Code plugin: customize where `--worktree` worktrees go and what branch they get, via path/branch templates in settings.json.",
+  "description": "Claude Code plugin: customize where `--worktree` worktrees go and what branch they get, via repoSettings templates in settings.json.",
   "author": {
     "name": "fnrhombus"
   },
   "homepage": "https://github.com/fnrhombus/claude-code-worktree-paths",
   "repository": "https://github.com/fnrhombus/claude-code-worktree-paths",
-  "license": "MIT",
-  "hooks": "./hooks/hooks.json"
+  "license": "MIT"
 }
