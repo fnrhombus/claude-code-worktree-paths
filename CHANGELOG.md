@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v1.0.0...claude-code-worktree-paths-v1.0.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* drop duplicate hooks reference + PAT-gate the release flow ([#12](https://github.com/fnrhombus/claude-code-worktree-paths/issues/12)) ([7fa2f22](https://github.com/fnrhombus/claude-code-worktree-paths/commit/7fa2f220b6ebe9118351c86540ecf8ce71609d80))
+
 ## [1.0.0](https://github.com/fnrhombus/claude-code-worktree-paths/compare/claude-code-worktree-paths-v0.5.0...claude-code-worktree-paths-v1.0.0) (2026-05-18)
 
 

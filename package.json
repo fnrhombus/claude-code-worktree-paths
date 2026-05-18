@@ -1,6 +1,6 @@
 {
   "name": "claude-code-worktree-paths",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Claude Code plugin: customize where `--worktree` worktrees go and what branch they get, via path/branch templates in settings.json.",
   "main": "dist/index.js",
   "bin": {
