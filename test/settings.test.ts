@@ -3,13 +3,13 @@ import { deepStrictEqual } from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, mergeWorktreePaths } from "../src/settings.ts";
+import { loadSettings, mergeRepoSettings } from "../src/settings.ts";
 
-describe("mergeWorktreePaths", () => {
+describe("mergeRepoSettings", () => {
   let tmp: string;
 
   beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), "wtp-merge-"));
+    tmp = mkdtempSync(join(tmpdir(), "rs-merge-"));
   });
   afterEach(() => {
     rmSync(tmp, { recursive: true, force: true });
@@ -22,44 +22,57 @@ describe("mergeWorktreePaths", () => {
   };
 
   it("returns empty when no paths exist", () => {
-    deepStrictEqual(mergeWorktreePaths([join(tmp, "missing.json"), null]), {});
+    deepStrictEqual(mergeRepoSettings([join(tmp, "missing.json"), null]), {});
   });
 
   it("reads a single tier", () => {
-    const p = write("user.json", { worktreePaths: { pathTemplate: "x" } });
-    deepStrictEqual(mergeWorktreePaths([p]), { pathTemplate: "x" });
+    const p = write("user.json", { repoSettings: { worktreeTemplate: "x" } });
+    deepStrictEqual(mergeRepoSettings([p]), { worktreeTemplate: "x" });
   });
 
   it("higher-priority tier overrides same field", () => {
     const user = write("user.json", {
-      worktreePaths: { pathTemplate: "user-path" },
+      repoSettings: { worktreeTemplate: "user-path" },
     });
     const project = write("project.json", {
-      worktreePaths: { pathTemplate: "project-path" },
+      repoSettings: { worktreeTemplate: "project-path" },
     });
     // Lowest priority first; later overrides earlier.
-    deepStrictEqual(mergeWorktreePaths([user, project]), {
-      pathTemplate: "project-path",
+    deepStrictEqual(mergeRepoSettings([user, project]), {
+      worktreeTemplate: "project-path",
     });
   });
 
   it("fields from lower tiers survive when higher tier sets different fields", () => {
     const user = write("user.json", {
-      worktreePaths: {
-        pathTemplate: "user-path",
+      repoSettings: {
+        worktreeTemplate: "user-path",
         branchTemplate: "user-branch",
       },
     });
     const project = write("project.json", {
-      worktreePaths: { branchTemplate: "project-branch" },
+      repoSettings: { branchTemplate: "project-branch" },
     });
     const local = write("local.json", {
-      worktreePaths: { gateEnvVar: "FOO" },
+      repoSettings: { gateEnvVar: "FOO" },
     });
-    deepStrictEqual(mergeWorktreePaths([user, project, local]), {
-      pathTemplate: "user-path",
+    deepStrictEqual(mergeRepoSettings([user, project, local]), {
+      worktreeTemplate: "user-path",
       branchTemplate: "project-branch",
       gateEnvVar: "FOO",
+    });
+  });
+
+  it("reads cloneTemplate field (consumed by fnclaude, not this plugin)", () => {
+    const p = write("user.json", {
+      repoSettings: {
+        worktreeTemplate: "~/src/{repo}@{owner}+{branch}",
+        cloneTemplate: "~/src/{repo}@{owner}",
+      },
+    });
+    deepStrictEqual(mergeRepoSettings([p]), {
+      worktreeTemplate: "~/src/{repo}@{owner}+{branch}",
+      cloneTemplate: "~/src/{repo}@{owner}",
     });
   });
 
@@ -67,27 +80,29 @@ describe("mergeWorktreePaths", () => {
     const bad = join(tmp, "bad.json");
     writeFileSync(bad, "{not valid json");
     const good = write("good.json", {
-      worktreePaths: { pathTemplate: "kept" },
+      repoSettings: { worktreeTemplate: "kept" },
     });
-    deepStrictEqual(mergeWorktreePaths([bad, good]), { pathTemplate: "kept" });
+    deepStrictEqual(mergeRepoSettings([bad, good]), {
+      worktreeTemplate: "kept",
+    });
   });
 
-  it("skips files without worktreePaths key", () => {
+  it("skips files without repoSettings key", () => {
     const other = write("other.json", { somethingElse: true });
     const real = write("real.json", {
-      worktreePaths: { pathTemplate: "kept" },
+      repoSettings: { worktreeTemplate: "kept" },
     });
-    deepStrictEqual(mergeWorktreePaths([other, real]), {
-      pathTemplate: "kept",
+    deepStrictEqual(mergeRepoSettings([other, real]), {
+      worktreeTemplate: "kept",
     });
   });
 
   it("treats null entries (e.g. unavailable managed tier) as skipped", () => {
     const user = write("user.json", {
-      worktreePaths: { pathTemplate: "user-path" },
+      repoSettings: { worktreeTemplate: "user-path" },
     });
-    deepStrictEqual(mergeWorktreePaths([user, null]), {
-      pathTemplate: "user-path",
+    deepStrictEqual(mergeRepoSettings([user, null]), {
+      worktreeTemplate: "user-path",
     });
   });
 });
@@ -97,7 +112,7 @@ describe("loadSettings", () => {
   let originalHome: string | undefined;
 
   beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), "wtp-load-"));
+    tmp = mkdtempSync(join(tmpdir(), "rs-load-"));
     originalHome = process.env["HOME"];
     process.env["HOME"] = join(tmp, "home");
     mkdirSync(join(tmp, "home", ".claude"), { recursive: true });
@@ -111,19 +126,21 @@ describe("loadSettings", () => {
   it("reads user settings when no project tier exists", () => {
     writeFileSync(
       join(tmp, "home", ".claude", "settings.json"),
-      JSON.stringify({ worktreePaths: { pathTemplate: "user-only" } }),
+      JSON.stringify({ repoSettings: { worktreeTemplate: "user-only" } }),
     );
     const projectRoot = join(tmp, "repo");
     mkdirSync(projectRoot, { recursive: true });
-    deepStrictEqual(loadSettings(projectRoot), { pathTemplate: "user-only" });
+    deepStrictEqual(loadSettings(projectRoot), {
+      worktreeTemplate: "user-only",
+    });
   });
 
   it("project overrides user; local overrides project", () => {
     writeFileSync(
       join(tmp, "home", ".claude", "settings.json"),
       JSON.stringify({
-        worktreePaths: {
-          pathTemplate: "user-path",
+        repoSettings: {
+          worktreeTemplate: "user-path",
           branchTemplate: "user-branch",
         },
       }),
@@ -133,17 +150,17 @@ describe("loadSettings", () => {
     writeFileSync(
       join(projectRoot, ".claude", "settings.json"),
       JSON.stringify({
-        worktreePaths: { branchTemplate: "project-branch" },
+        repoSettings: { branchTemplate: "project-branch" },
       }),
     );
     writeFileSync(
       join(projectRoot, ".claude", "settings.local.json"),
       JSON.stringify({
-        worktreePaths: { gateEnvVar: "LOCAL_FLAG" },
+        repoSettings: { gateEnvVar: "LOCAL_FLAG" },
       }),
     );
     deepStrictEqual(loadSettings(projectRoot), {
-      pathTemplate: "user-path",
+      worktreeTemplate: "user-path",
       branchTemplate: "project-branch",
       gateEnvVar: "LOCAL_FLAG",
     });
